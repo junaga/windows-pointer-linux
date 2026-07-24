@@ -33,7 +33,14 @@ if(WINDOWS_POINTER_BUILD_PLUGIN)
 
   add_library(windows-pointer-linux MODULE src/plugin.cpp)
   target_compile_features(windows-pointer-linux PRIVATE cxx_std_23)
-  target_compile_options(windows-pointer-linux PRIVATE -fno-gnu-unique)
+  target_compile_options(
+    windows-pointer-linux
+    PRIVATE
+      -fno-gnu-unique
+      -Wall
+      -Wextra
+      -Wpedantic
+  )
   target_link_libraries(
     windows-pointer-linux
     PRIVATE
