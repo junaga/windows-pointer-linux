@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 
 project(
   windows-pointer-linux
-  VERSION 0.1.0
+  VERSION 1.0.0
   DESCRIPTION "Windows 11 pointer motion for Hyprland"
   LANGUAGES CXX
 )
@@ -72,6 +72,8 @@ if(WINDOWS_POINTER_BUILD_TOOLS)
     add_executable(windows-pointer-windows-oracle tools/windows-oracle.cpp)
     windows_pointer_target_defaults(windows-pointer-windows-oracle)
   endif()
+
+  install(TARGETS windows-pointer-replay RUNTIME DESTINATION bin)
 endif()
 
 if(WINDOWS_POINTER_BUILD_BENCHMARKS)
@@ -123,6 +125,10 @@ if(WINDOWS_POINTER_BUILD_PLUGIN)
       PkgConfig::HYPRLAND
   )
   set_target_properties(windows-pointer-linux PROPERTIES PREFIX "")
+  install(
+    TARGETS windows-pointer-linux
+    LIBRARY DESTINATION lib/hyprland/plugins
+  )
 endif()
 
 include(CTest)

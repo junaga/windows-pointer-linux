@@ -1,0 +1,92 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: linux / ${{ matrix.compiler }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: gcc
+            cxx: g++
+          - compiler: clang
+            cxx: clang++
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: configure
+        run: >-
+          cmake -S . -B build/ci -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+          -DWINDOWS_POINTER_BUILD_PLUGIN=OFF
+          -DBUILD_TESTING=ON
+
+      - name: build
+        run: cmake --build build/ci
+
+      - name: test
+        run: ctest --test-dir build/ci --output-on-failure
+
+  sanitize:
+    name: sanitizers and fuzzer
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: configure tests
+        run: >-
+          cmake -S . -B build/sanitize -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_COMPILER=clang++
+          -DWINDOWS_POINTER_BUILD_PLUGIN=OFF
+          -DWINDOWS_POINTER_ENABLE_SANITIZERS=ON
+          -DBUILD_TESTING=ON
+
+      - name: build and test
+        run: |
+          cmake --build build/sanitize
+          ctest --test-dir build/sanitize --output-on-failure
+
+      - name: configure fuzzer
+        run: >-
+          cmake -S . -B build/fuzz -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_COMPILER=clang++
+          -DWINDOWS_POINTER_BUILD_PLUGIN=OFF
+          -DWINDOWS_POINTER_BUILD_FUZZER=ON
+          -DBUILD_TESTING=OFF
+
+      - name: annoy it briefly
+        run: |
+          cmake --build build/fuzz
+          build/fuzz/windows_pointer_fuzzer -runs=100000
+
+  windows:
+    name: windows / msvc
+    runs-on: windows-2025
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: configure
+        run: >-
+          cmake -S . -B build/ci
+          -DWINDOWS_POINTER_BUILD_PLUGIN=OFF
+          -DBUILD_TESTING=ON
+
+      - name: build
+        run: cmake --build build/ci --config Release --parallel
+
+      - name: test
+        run: ctest --test-dir build/ci -C Release --output-on-failure
