@@ -67,7 +67,11 @@ if(BUILD_TESTING)
     FetchContent_MakeAvailable(googletest)
   endif()
 
-  add_executable(windows_pointer_engine_test tests/engine_test.cpp)
+  add_executable(
+    windows_pointer_engine_test
+    tests/engine_test.cpp
+    tests/model_test.cpp
+  )
   target_compile_features(windows_pointer_engine_test PRIVATE cxx_std_23)
   target_compile_options(
     windows_pointer_engine_test

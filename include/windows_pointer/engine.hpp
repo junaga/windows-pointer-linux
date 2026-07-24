@@ -28,7 +28,7 @@ class Engine {
   public:
     explicit Engine(Settings settings = {});
 
-    [[nodiscard]] auto apply(Motion raw) -> Motion;
+    [[nodiscard]] auto apply(Motion raw, std::uint16_t displayDpi = 96) -> Motion;
     void               configure(Settings settings);
     void               reset();
 
@@ -37,20 +37,30 @@ class Engine {
   private:
     static constexpr std::int64_t Q16 = 1LL << 16;
 
-    void buildCurve();
+    struct Ballistics {
+        std::array<std::int64_t, 5> x{};
+        std::array<std::int64_t, 5> y{};
+        std::array<std::int64_t, 4> slopes{};
+        std::array<std::int64_t, 4> intercepts{};
+    };
 
-    [[nodiscard]] auto applyEnhanced(Motion raw) -> Motion;
+    void buildCurve(std::uint16_t displayDpi);
+
+    [[nodiscard]] auto applyEnhanced(Motion raw, std::uint16_t displayDpi) -> Motion;
     [[nodiscard]] auto applyLinear(Motion raw) -> Motion;
 
-    Settings                    m_settings;
-    std::array<std::int64_t, 5> m_xScaled{};
-    std::array<std::int64_t, 5> m_yScaled{};
-    std::array<std::int64_t, 4> m_slopes{};
-    std::array<std::int64_t, 4> m_intercepts{};
-    std::int64_t                m_xRemainder = 0;
-    std::int64_t                m_yRemainder = 0;
-    std::size_t                 m_previousSegment = 0;
+    Settings      m_settings;
+    Ballistics    m_ballistics;
+    std::uint16_t m_ballisticsDpi = 0;
+
+    std::int64_t m_enhancedXRemainder = 0;
+    std::int64_t m_enhancedYRemainder = 0;
+    std::size_t  m_previousSegment     = 0;
+
+    std::int64_t m_linearXRemainder = 0;
+    std::int64_t m_linearYRemainder = 0;
 };
 
-} // namespace windows_pointer
+[[nodiscard]] auto displayDpiFromScale(double scale) -> std::uint16_t;
 
+} // namespace windows_pointer

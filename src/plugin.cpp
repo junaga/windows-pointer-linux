@@ -1,9 +1,11 @@
 #include <windows_pointer/engine.hpp>
 
+#include <hyprland/src/Compositor.hpp>
 #include <hyprland/src/config/values/types/BoolValue.hpp>
 #include <hyprland/src/config/values/types/StringValue.hpp>
 #include <hyprland/src/devices/IPointer.hpp>
 #include <hyprland/src/event/EventBus.hpp>
+#include <hyprland/src/helpers/Monitor.hpp>
 #include <hyprland/src/managers/input/InputManager.hpp>
 #include <hyprland/src/plugins/PluginAPI.hpp>
 
@@ -13,7 +15,6 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
-#include <unordered_map>
 
 namespace {
 
@@ -23,20 +24,13 @@ using windows_pointer::Settings;
 
 using OriginalOnMouseMoved = void (*)(CInputManager*, IPointer::SMotionEvent);
 
-struct DeviceState {
-    DeviceState(const SP<IPointer>& pointer, Settings settings) : device(pointer), engine(settings) {}
-
-    WP<IPointer> device;
-    Engine       engine;
-};
-
-HANDLE                                      g_pluginHandle = nullptr;
-CFunctionHook*                              g_motionHook    = nullptr;
-SP<Config::Values::CStringValue>            g_pointerSpeed;
-SP<Config::Values::CBoolValue>              g_enhancePointerPrecision;
-CHyprSignalListener                         g_configReloaded;
-Settings                                    g_settings;
-std::unordered_map<IPointer*, DeviceState> g_devices;
+HANDLE                           g_pluginHandle = nullptr;
+CFunctionHook*                   g_motionHook    = nullptr;
+SP<Config::Values::CStringValue> g_pointerSpeed;
+SP<Config::Values::CBoolValue>   g_enhancePointerPrecision;
+CHyprSignalListener              g_configReloaded;
+Settings                         g_settings;
+Engine                           g_engine;
 
 [[noreturn]] void fail(const std::string& message) {
     HyprlandAPI::addNotification(
@@ -67,10 +61,7 @@ void readSettings() {
         return;
 
     g_settings = next;
-    std::erase_if(g_devices, [](const auto& item) { return item.second.device.expired(); });
-
-    for (auto& [_, device] : g_devices)
-        device.engine.configure(g_settings);
+    g_engine.configure(g_settings);
 }
 
 [[nodiscard]] auto rawCoordinate(double value) -> std::int32_t {
@@ -79,12 +70,9 @@ void readSettings() {
     return static_cast<std::int32_t>(std::clamp(value, lower, upper));
 }
 
-[[nodiscard]] auto stateFor(const SP<IPointer>& pointer) -> DeviceState& {
-    if (const auto existing = g_devices.find(pointer.get()); existing != g_devices.end())
-        return existing->second;
-
-    std::erase_if(g_devices, [](const auto& item) { return item.second.device.expired(); });
-    return g_devices.try_emplace(pointer.get(), pointer, g_settings).first->second;
+[[nodiscard]] auto currentDisplayDpi() -> std::uint16_t {
+    const auto monitor = g_pCompositor->getMonitorFromCursor();
+    return windows_pointer::displayDpiFromScale(monitor ? monitor->m_scale : 1.0);
 }
 
 void onMouseMoved(CInputManager* inputManager, IPointer::SMotionEvent event) {
@@ -92,10 +80,12 @@ void onMouseMoved(CInputManager* inputManager, IPointer::SMotionEvent event) {
         std::isfinite(event.unaccel.y);
 
     if (canProcess) {
-        const auto moved = stateFor(event.device).engine.apply({
-            .x = rawCoordinate(event.unaccel.x),
-            .y = rawCoordinate(event.unaccel.y),
-        });
+        const auto moved = g_engine.apply(
+            {
+                .x = rawCoordinate(event.unaccel.x),
+                .y = rawCoordinate(event.unaccel.y),
+            },
+            currentDisplayDpi());
         event.delta = Vector2D{static_cast<double>(moved.x), static_cast<double>(moved.y)};
     }
 
@@ -175,7 +165,6 @@ APICALL EXPORT void PLUGIN_EXIT() {
         g_motionHook = nullptr;
     }
 
-    g_devices.clear();
     g_pointerSpeed.reset();
     g_enhancePointerPrecision.reset();
     g_pluginHandle = nullptr;
