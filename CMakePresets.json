@@ -1,0 +1,92 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "dev",
+      "displayName": "development",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/dev",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
+      "name": "sanitize",
+      "displayName": "address and undefined behavior sanitizers",
+      "inherits": "dev",
+      "binaryDir": "${sourceDir}/build/sanitize",
+      "cacheVariables": {
+        "WINDOWS_POINTER_BUILD_PLUGIN": "OFF",
+        "WINDOWS_POINTER_ENABLE_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "benchmark",
+      "displayName": "release benchmark",
+      "inherits": "release",
+      "binaryDir": "${sourceDir}/build/benchmark",
+      "cacheVariables": {
+        "BUILD_TESTING": "OFF",
+        "WINDOWS_POINTER_BUILD_PLUGIN": "OFF",
+        "WINDOWS_POINTER_BUILD_BENCHMARKS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "sanitize",
+      "configurePreset": "sanitize"
+    },
+    {
+      "name": "benchmark",
+      "configurePreset": "benchmark"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "sanitize",
+      "configurePreset": "sanitize",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}
