@@ -1,6 +1,7 @@
 #include <windows_pointer/engine.hpp>
 
 #include <hyprland/src/Compositor.hpp>
+#include <hyprland/src/config/ConfigManager.hpp>
 #include <hyprland/src/config/values/types/BoolValue.hpp>
 #include <hyprland/src/config/values/types/StringValue.hpp>
 #include <hyprland/src/devices/IPointer.hpp>
@@ -299,6 +300,16 @@ void registerHyprctl() {
         fail("could not register the hyprctl status command");
 }
 
+int luaLoaded(lua_State*) {
+    return 0;
+}
+
+void registerLuaMarker() {
+    if (Config::mgr()->type() == Config::CONFIG_LUA &&
+        !HyprlandAPI::addLuaFunction(g_pluginHandle, "windows_pointer_linux", "loaded", luaLoaded))
+        fail("could not register the Lua plugin namespace");
+}
+
 void installMotionHook() {
     const auto functions = HyprlandAPI::findFunctionsByName(g_pluginHandle, "onMouseMoved");
     const auto function  = std::ranges::find_if(functions, [](const SFunctionMatch& candidate) {
@@ -327,6 +338,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     registerConfig();
     registerHyprctl();
+    registerLuaMarker();
     installMotionHook();
 
     return {

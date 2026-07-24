@@ -84,17 +84,19 @@ Replace `OWNER`; no, GitHub has not agreed to infer it from the project name.
 
 ## configure
 
-Load the plugin before declaring its values:
+The guard handles Hyprland's two-phase Lua plugin load on a fresh session:
 
 ```lua
-hl.config({
-    plugin = {
-        windows_pointer_linux = {
-            pointer_speed = "10/20",
-            enhance_pointer_precision = true,
+if hl.plugin.windows_pointer_linux then
+    hl.config({
+        plugin = {
+            windows_pointer_linux = {
+                pointer_speed = "10/20",
+                enhance_pointer_precision = true,
+            },
         },
-    },
-})
+    })
+end
 ```
 
 Those are Windows 11's defaults. Configuration reloads preserve the motion
