@@ -83,6 +83,33 @@ The tool reports the system DPI it observed. For per-monitor comparisons, put
 the cursor on the target display before starting it and keep the trace inside
 that display.
 
+## asking the running compositor
+
+With a development build and a Hyprland session:
+
+```sh
+scripts/live-test.sh build/dev
+```
+
+The script creates a temporary `/dev/uinput` mouse, sends one raw report
+through libinput and Hyprland, and checks the plugin's per-device diagnostics.
+It needs write access to `/dev/uinput`; a normal desktop logind ACL is enough.
+The device is always destroyed when the helper exits.
+
+The diagnostics are also useful without the script:
+
+```sh
+hyprctl windows-pointer-linux
+hyprctl -j windows-pointer-linux
+hyprctl windows-pointer-linux reset
+```
+
+`reset` clears the session motion state and counters. The live test verifies
+that the entire input path reaches the engine. Exact arithmetic stays in the
+isolated engine tests: moving another physical mouse during a live run changes
+the deliberately shared Windows accumulator, so comparing one injected report
+against a fresh engine would itself be the wrong model.
+
 ## benchmark
 
 ```sh

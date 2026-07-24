@@ -63,6 +63,11 @@ if(WINDOWS_POINTER_BUILD_TOOLS)
   windows_pointer_target_defaults(windows-pointer-replay)
   target_link_libraries(windows-pointer-replay PRIVATE windows_pointer::engine)
 
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_executable(windows-pointer-uinput tools/uinput-mouse.cpp)
+    windows_pointer_target_defaults(windows-pointer-uinput)
+  endif()
+
   if(WIN32)
     add_executable(windows-pointer-windows-oracle tools/windows-oracle.cpp)
     windows_pointer_target_defaults(windows-pointer-windows-oracle)
@@ -107,6 +112,10 @@ if(WINDOWS_POINTER_BUILD_PLUGIN)
   add_library(windows-pointer-linux MODULE src/plugin.cpp)
   windows_pointer_target_defaults(windows-pointer-linux)
   target_compile_options(windows-pointer-linux PRIVATE -fno-gnu-unique)
+  target_compile_definitions(
+    windows-pointer-linux
+    PRIVATE WINDOWS_POINTER_VERSION="${PROJECT_VERSION}"
+  )
   target_link_libraries(
     windows-pointer-linux
     PRIVATE
