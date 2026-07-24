@@ -49,8 +49,14 @@ std::unordered_map<IPointer*, DeviceState> g_devices;
 
 void readSettings() {
     const auto parsedSpeed = windows_pointer::parsePointerSpeed(g_pointerSpeed->value());
-    if (!parsedSpeed)
+    if (!parsedSpeed) {
+        HyprlandAPI::addNotification(
+            g_pluginHandle,
+            "[windows-pointer-linux] ignoring pointer-speed: " + parsedSpeed.error(),
+            CHyprColor{1.0F, 0.7F, 0.2F, 1.0F},
+            5000.0F);
         return;
+    }
 
     const Settings next{
         .pointerSpeed            = *parsedSpeed,
@@ -174,4 +180,3 @@ APICALL EXPORT void PLUGIN_EXIT() {
     g_enhancePointerPrecision.reset();
     g_pluginHandle = nullptr;
 }
-

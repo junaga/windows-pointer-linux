@@ -61,6 +61,10 @@ Those are deliberately the two controls from Windows 11 Settings:
 - `enhance_pointer_precision` enables or disables the Windows acceleration
   curve.
 
+Invalid speed strings are ignored with a notification. This second check is
+intentional: Hyprland 0.55's Lua config adapter forgets the validator attached
+to plugin string values on its way across the type bridge. beautiful.
+
 Do not enable Hyprland's `input.force_no_accel`: it tells Hyprland to ignore the
 accelerated delta, including ours. Existing libinput sensitivity and profile
 settings do not shape mouse motion while this plugin is active because the
