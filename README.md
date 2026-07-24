@@ -1,50 +1,92 @@
 # windows-pointer-linux
 
-the Windows 11 pointer algorithm for Hyprland. because apparently a cursor can
-have platform exclusives.
+Windows 11 desktop pointer motion for Hyprland. because apparently a cursor
+can have platform exclusives.
 
-This plugin takes the raw counts Hyprland already receives from a physical
-mouse and produces the accelerated delta with Windows' fixed-point algorithm.
-Touchpads and virtual pointers pass through unchanged. Each mouse gets its own
-history and subpixel accumulator, including mice connected after startup.
+The plugin takes the raw integer counts Hyprland already receives from a
+physical mouse and replaces libinput's accelerated cursor delta with Windows'
+fixed-point algorithm. It implements both public Windows 11 controls:
 
-v0.1 implements the published reverse engineering of the Windows 11 algorithm.
-It is covered by deterministic tests, but it has not yet been compared against
-a Windows oracle, so "bit-perfect" would be lying with confidence.
+- pointer speed from `"1/20"` through `"20/20"`;
+- Enhance pointer precision on or off.
 
-## build it
+There is no mouse-DPI or polling-rate field. Hardware DPI already changes the
+counts a mouse reports, and polling behavior already changes how those counts
+are divided into reports. Supplying them again would be extremely configurable
+double counting.
+
+## what is actually finished
+
+Version 1.0 implements the default curves audited in two shipping
+`win32kbase.sys` builds, the complete 1–20 non-EPP mapping, signed subpixel
+remainders, upward segment smoothing, session-wide state shared by physical
+mice, and per-monitor display scaling.
+
+The engine is checked against an independent straight-line model across all
+settings, five display DPI values, thousands of reports per combination, and
+signed device-coordinate limits. It also has scenario tests, sanitizers,
+fuzzing, a Windows observation tool, and a live synthetic mouse test through
+libinput and a running Hyprland session. The boring details live in
+[testing](docs/testing.md); the less boring reverse engineering lives in
+[the Windows audit](docs/research/windows-11.md).
+
+This is still an implementation of private Windows behavior, not a Microsoft
+API contract. A future Windows update can change it. The hashes in the audit
+make that a testable event instead of a spiritual disagreement.
+
+## install
 
 You need CMake 3.25+, a C++23 compiler, pkg-config, and development headers for
-the exact Hyprland version currently running.
+the exact Hyprland build you are running.
+
+### local install
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
-ctest --test-dir build --output-on-failure
-hyprctl plugin load "$(pwd)/build/windows-pointer-linux.so"
+cmake --preset release
+cmake --build --preset release
+ctest --preset release
+cmake --install build/release --prefix "$HOME/.local"
 ```
 
-Hyprland plugins do not have a stable C++ ABI. The plugin checks the full ABI
-string and refuses to load when it does not match. After a Hyprland update,
-rebuild it. This is annoying, but much less annoying than crashing the session
-with yesterday's vtable.
+Then load the absolute path. Hyprland requires it:
 
-Unload the plugin before rebuilding the same `.so` in place:
+```lua
+local plugin = os.getenv("HOME")
+    .. "/.local/lib/hyprland/plugins/windows-pointer-linux.so"
+
+hl.plugin.load(plugin)
+```
+
+Hyprland plugins use an unstable C++ ABI. The plugin verifies the complete ABI
+hash and refuses to load against a different compositor build. Rebuild and
+reinstall it after a Hyprland update. annoying, but preferable to debugging a
+stale vtable with your cursor.
+
+Unload a manually loaded plugin before overwriting the same file:
 
 ```sh
-hyprctl plugin unload "$(pwd)/build/windows-pointer-linux.so"
+hyprctl plugin unload \
+  "$HOME/.local/lib/hyprland/plugins/windows-pointer-linux.so"
 ```
 
-`hyprpm.toml` is included for installation through hyprpm once the repository
-has a public URL.
+### hyprpm
 
-## configure it
+The repository includes `hyprpm.toml`, so after this repository has a public
+Git URL it can be installed normally:
+
+```sh
+hyprpm add https://github.com/OWNER/windows-pointer-linux
+hyprpm enable windows-pointer-linux
+hyprpm reload
+```
+
+Replace `OWNER`; no, GitHub has not agreed to infer it from the project name.
+
+## configure
 
 Load the plugin before declaring its values:
 
 ```lua
-hl.plugin.load("/absolute/path/to/windows-pointer-linux/build/windows-pointer-linux.so")
-
 hl.config({
     plugin = {
         windows_pointer_linux = {
@@ -55,62 +97,82 @@ hl.config({
 })
 ```
 
-Those are deliberately the two controls from Windows 11 Settings:
+Those are Windows 11's defaults. Configuration reloads preserve the motion
+accumulators, matching Windows. Invalid speed strings are rejected by the
+plugin and reported as a Hyprland notification.
 
-- `pointer_speed` accepts `"1/20"` through `"20/20"`; `"10/20"` is the default.
-- `enhance_pointer_precision` enables or disables the Windows acceleration
-  curve.
+Leave `input.force_no_accel` disabled: that setting explicitly tells Hyprland
+to consume raw motion instead of the accelerated delta, including ours.
+Libinput `sensitivity` and `accel_profile` no longer shape the normal cursor
+while the plugin is active because their output is replaced.
 
-Invalid speed strings are ignored with a notification. This second check is
-intentional: Hyprland 0.55's Lua config adapter forgets the validator attached
-to plugin string values on its way across the type bridge. beautiful.
+Touchpads, virtual pointers, absolute devices, and fractional raw coordinates
+created by arbitrary device rotation pass through unchanged. Quarter-turn
+rotations normally remain integral. Applications that explicitly request
+unaccelerated relative motion still get it; the desktop cursor changes, a
+game's raw-input path does not.
 
-Do not enable Hyprland's `input.force_no_accel`: it tells Hyprland to ignore the
-accelerated delta, including ours. Existing libinput sensitivity and profile
-settings do not shape mouse motion while this plugin is active because the
-plugin replaces that delta from the raw counts. Raw-input clients still receive
-the honest unaccelerated delta. Touchpad settings continue to work normally.
+## inspect it
 
-There is no mouse DPI or polling-rate setting. DPI is already represented by
-how many raw counts the mouse reports; polling rate is already represented by
-how those counts are split into reports. Asking for either again would count
-the same fact twice, which computers are extremely willing to do.
+```sh
+hyprctl windows-pointer-linux
+hyprctl -j windows-pointer-linux
+hyprctl windows-pointer-linux reset
+```
 
-The current curve uses Windows' 100% display-scaling reference (96 DPI).
-Per-monitor display scaling, rotated devices, and special pointer hardware are
-future work.
+The status includes active settings, pass-through reasons, per-device report
+counts, and the last raw/output motion. `reset` clears diagnostics and the
+session pointer state. It exists for testing and for the ancient repair ritual
+of turning a thing off and on without actually unloading it.
 
-## why this layer
+## scope and tradeoffs
 
-- A [libinput custom profile][libinput-custom] is convenient and static, but it
-  models output as a sampled function of libinput's calculated velocity. The
-  Windows implementation has its own fixed-point curve, segment-transition
-  smoothing, and subpixel state.
-- [libinput-epp][libinput-epp] puts the reverse-engineered algorithm in the
-  right library, but requires replacing or rebuilding system libinput.
-- [libinput Lua plugins][libinput-lua] can edit raw evdev frames without a
-  fork, but plugins are opt-in at the compositor and [Hyprland][hyprland-plugins]
-  does not currently load them.
-- A uinput daemon can work across compositors, at the cost of grabbing devices,
-  creating virtual ones, permissions, and a service. an entire fake mouse to
-  move the real mouse is funny exactly once.
-- This Hyprland plugin is small and local. Its tax is rebuilding against
-  Hyprland's unstable plugin ABI.
+The [architecture](docs/architecture.md) explains where the hook sits, what
+state it owns, and why raw-input clients are untouched. The
+[alternatives](docs/alternatives.md) compares the Hyprland custom-curve
+generator, `libinput-epp`, libinput Lua plugins, uinput daemons, Xorg settings,
+YeetMouse/LeetMouse/maccel, application acceleration, and Raw Accel.
 
-## sources
+The short version: a Hyprland plugin is the smallest layer that exposes the
+required raw reports and cursor destination without replacing libinput,
+installing a kernel module, or inventing a permanent fake mouse. Its price is
+Hyprland-only support and a rebuild whenever the compositor ABI changes.
 
-The EPP curve and fixed-point behavior are independently implemented from
-[tehabstract's reverse-engineered libinput patch][libinput-epp], which documents
-the corresponding `win32kbase` routines. The non-EPP 1–20 gains follow the
-piecewise Windows sensitivity mapping documented by [Mark Cranness][markc].
-Microsoft documents the public [1–20 setting and default value of 10][spi].
+## develop
 
-The project is BSD-3-Clause licensed. libinput and the reference patch are MIT
-licensed.
+```sh
+cmake --preset dev
+cmake --build --preset dev
+ctest --preset dev
+```
 
-[hyprland-plugins]: https://wiki.hypr.land/Plugins/Using-Plugins/
-[libinput-custom]: https://wayland.freedesktop.org/libinput/doc/latest/pointer-acceleration.html#the-custom-acceleration-profile
-[libinput-epp]: https://gitlab.freedesktop.org/tehabstract/libinput-epp
-[libinput-lua]: https://wayland.freedesktop.org/libinput/doc/latest/lua-plugins.html
-[markc]: https://www.esreality.com/post/1846538/markc-windows-7-mouse-acceleration-fix/
+See [contributing](CONTRIBUTING.md) before changing arithmetic and
+[testing](docs/testing.md) for the replay tool, Windows oracle, live compositor
+test, fuzz target, sanitizers, and benchmark.
+
+The project is BSD-3-Clause licensed. No Microsoft binary, PDB, or source code
+is distributed here.
+
+## primary references
+
+- Microsoft documents the public
+  [`SystemParametersInfo` mouse settings][spi].
+- Libinput documents
+  [raw unaccelerated pointer coordinates][libinput-raw] and
+  [custom acceleration profiles][libinput-custom].
+- Hyprland documents its [input variables][hypr-variables] and
+  [plugin installation model][hypr-plugins].
+- [libinput-epp] records the earlier reverse engineering that motivated the
+  clean implementation.
+- [Mark Cranness' analysis][markc] records the non-EPP sensitivity mapping.
+- [Winbindex] locates binaries by Microsoft update metadata; PDBs came from
+  Microsoft's public symbol server.
+
 [spi]: https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-systemparametersinfow
+[libinput-raw]: https://wayland.freedesktop.org/libinput/doc/latest/api/group__event__pointer.html
+[libinput-custom]: https://wayland.freedesktop.org/libinput/doc/latest/pointer-acceleration.html
+[hypr-variables]: https://wiki.hypr.land/Configuring/Variables/
+[hypr-plugins]: https://wiki.hypr.land/Plugins/Using-Plugins/
+[libinput-epp]: https://gitlab.freedesktop.org/tehabstract/libinput-epp
+[markc]: https://www.esreality.com/post/1846538/markc-windows-7-mouse-acceleration-fix/
+[Winbindex]: https://github.com/m417z/winbindex
