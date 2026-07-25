@@ -35,11 +35,8 @@ class Engine {
     [[nodiscard]] auto settings() const -> Settings;
 
   private:
-    static constexpr std::int64_t Q16 = 1LL << 16;
-
     struct Ballistics {
         std::array<std::int64_t, 5> x{};
-        std::array<std::int64_t, 5> y{};
         std::array<std::int64_t, 4> slopes{};
         std::array<std::int64_t, 4> intercepts{};
     };

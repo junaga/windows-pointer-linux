@@ -31,6 +31,6 @@ Unload the plugin before rebuilding the same `.so` in place. Hyprland executes
 it inside the compositor process; overwriting mapped code is a bold testing
 strategy.
 
-See `docs/testing.md` for the replay, Windows oracle, fuzzer, and benchmark.
+See `docs/testing.md` for the replay tool, fuzzer, live test, and benchmark.
 Small commits are preferred. Lowercase sarcasm is welcome. Unexplained magic
 numbers are not.

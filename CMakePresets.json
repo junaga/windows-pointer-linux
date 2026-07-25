@@ -31,6 +31,9 @@
       "displayName": "address and undefined behavior sanitizers",
       "inherits": "dev",
       "binaryDir": "${sourceDir}/build/sanitize",
+      "environment": {
+        "LD_PRELOAD": ""
+      },
       "cacheVariables": {
         "WINDOWS_POINTER_BUILD_PLUGIN": "OFF",
         "WINDOWS_POINTER_ENABLE_SANITIZERS": "ON"

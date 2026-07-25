@@ -1,13 +1,12 @@
 [repository]
 name = "windows-pointer-linux"
-authors = ["windows-pointer-linux contributors"]
+authors = ["junaga"]
 
 [windows-pointer-linux]
 description = "the windows 11 pointer algorithm, except it escaped"
-authors = ["windows-pointer-linux contributors"]
+authors = ["junaga"]
 output = "build/windows-pointer-linux.so"
 build = [
     "cmake -S . -B build -DBUILD_TESTING=OFF",
     "cmake --build build --parallel",
 ]
-

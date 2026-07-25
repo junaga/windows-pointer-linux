@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <limits>
 
 namespace windows_pointer {
 namespace {
@@ -79,6 +80,8 @@ TEST(DisplayDpi, ConvertsHyprlandScaleToWindowsDpi) {
     EXPECT_EQ(displayDpiFromScale(1.5), 144);
     EXPECT_EQ(displayDpiFromScale(2.0), 192);
     EXPECT_EQ(displayDpiFromScale(99.0), 480);
+    EXPECT_EQ(displayDpiFromScale(std::numeric_limits<double>::max()), 480);
+    EXPECT_EQ(displayDpiFromScale(std::numeric_limits<double>::infinity()), 96);
 }
 
 TEST(DisplayDpi, SelectsTheCurveForTheCurrentDisplay) {
@@ -131,6 +134,21 @@ TEST(EnhancedMotion, MatchesReferenceTraceAtWindowsDefaults) {
 
     for (std::size_t index = 0; index < raw.size(); ++index)
         EXPECT_EQ(engine.apply(raw[index]), expected[index]) << "sample " << index;
+}
+
+TEST(MotionLimits, ClampsTheCompleteSignedInputRangeWithoutOverflowing) {
+    constexpr auto minimum = std::numeric_limits<std::int32_t>::min();
+    constexpr auto maximum = std::numeric_limits<std::int32_t>::max();
+    const Settings settings{
+        .pointerSpeed            = 20,
+        .enhancePointerPrecision = true,
+    };
+
+    Engine positive(settings);
+    Engine negative(settings);
+
+    EXPECT_EQ(positive.apply({maximum, maximum}, 480), (Motion{maximum, maximum}));
+    EXPECT_EQ(negative.apply({minimum, minimum}, 480), (Motion{minimum, minimum}));
 }
 
 } // namespace

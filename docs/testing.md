@@ -17,7 +17,8 @@ The suite covers:
 - all 20 Windows pointer-speed positions, with EPP on and off;
 - display regions at 96, 120, 144, 192, and 480 DPI;
 - segment transitions, signed remainders, zero reports, setting changes, and
-  the full signed 16-bit device-count range;
+  both realistic 16-bit reports and the complete signed evdev coordinate
+  range;
 - three very scientific traces: answering a Discord call, fighting somebody
   in Hypixel, and dragging a file into a website.
 
@@ -59,29 +60,6 @@ The native replay tool accepts raw integer mouse reports on standard input:
 Its CSV output contains both the input and accelerated result. That makes it
 easy to diff traces without inventing another file format because apparently
 commas have survived this long.
-
-## asking Windows
-
-On Windows, the build also produces `windows-pointer-windows-oracle`. It saves
-the current desktop mouse settings and cursor position, changes the two public
-Windows settings, injects each report with `SendInput`, observes the cursor,
-then restores everything even if the run fails:
-
-```powershell
-Get-Content tests\traces\discord-call.csv |
-  build\dev\windows-pointer-windows-oracle.exe --speed 10 --epp on
-```
-
-Run it on an otherwise idle desktop. The Windows pointer accumulator and
-previous curve segment are session-global private state. There is no public API
-that resets either one, so the first few observed pixels can depend on motion
-that happened before the tool started. This oracle is useful for whole-trace
-comparison and spotting algorithm changes; it is not dishonest enough to
-claim control over private state that Windows does not expose.
-
-The tool reports the system DPI it observed. For per-monitor comparisons, put
-the cursor on the target display before starting it and keep the trace inside
-that display.
 
 ## asking the running compositor
 

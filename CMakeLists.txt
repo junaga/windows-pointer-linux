@@ -68,11 +68,6 @@ if(WINDOWS_POINTER_BUILD_TOOLS)
     windows_pointer_target_defaults(windows-pointer-uinput)
   endif()
 
-  if(WIN32)
-    add_executable(windows-pointer-windows-oracle tools/windows-oracle.cpp)
-    windows_pointer_target_defaults(windows-pointer-windows-oracle)
-  endif()
-
   install(TARGETS windows-pointer-replay RUNTIME DESTINATION bin)
 endif()
 
@@ -113,7 +108,9 @@ if(WINDOWS_POINTER_BUILD_PLUGIN)
 
   add_library(windows-pointer-linux MODULE src/plugin.cpp)
   windows_pointer_target_defaults(windows-pointer-linux)
-  target_compile_options(windows-pointer-linux PRIVATE -fno-gnu-unique)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(windows-pointer-linux PRIVATE -fno-gnu-unique)
+  endif()
   target_compile_definitions(
     windows-pointer-linux
     PRIVATE WINDOWS_POINTER_VERSION="${PROJECT_VERSION}"

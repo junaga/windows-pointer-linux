@@ -1,5 +1,6 @@
 #include <windows_pointer/engine.hpp>
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 
@@ -13,16 +14,25 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
     };
     windows_pointer::Engine engine(settings);
 
-    for (std::size_t offset = 2; offset + 4 < size; offset += 5) {
-        const auto x = static_cast<std::int16_t>(
-            static_cast<std::uint16_t>(data[offset]) |
-            static_cast<std::uint16_t>(data[offset + 1]) << 8);
-        const auto y = static_cast<std::int16_t>(
-            static_cast<std::uint16_t>(data[offset + 2]) |
-            static_cast<std::uint16_t>(data[offset + 3]) << 8);
-        const auto dpi = static_cast<std::uint16_t>(96 + data[offset + 4] * 384 / 255);
+    for (std::size_t offset = 2; offset + 8 < size; offset += 9) {
+        const auto xBits =
+            static_cast<std::uint32_t>(data[offset]) |
+            static_cast<std::uint32_t>(data[offset + 1]) << 8 |
+            static_cast<std::uint32_t>(data[offset + 2]) << 16 |
+            static_cast<std::uint32_t>(data[offset + 3]) << 24;
+        const auto yBits =
+            static_cast<std::uint32_t>(data[offset + 4]) |
+            static_cast<std::uint32_t>(data[offset + 5]) << 8 |
+            static_cast<std::uint32_t>(data[offset + 6]) << 16 |
+            static_cast<std::uint32_t>(data[offset + 7]) << 24;
+        const auto dpi = static_cast<std::uint16_t>(96 + data[offset + 8] * 384 / 255);
 
-        const auto output = engine.apply({x, y}, dpi);
+        const auto output = engine.apply(
+            {
+                .x = std::bit_cast<std::int32_t>(xBits),
+                .y = std::bit_cast<std::int32_t>(yBits),
+            },
+            dpi);
         (void)output;
     }
 

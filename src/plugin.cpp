@@ -182,7 +182,17 @@ void onMouseMoved(CInputManager* inputManager, IPointer::SMotionEvent event) {
             case '\n': escaped += "\\n"; break;
             case '\r': escaped += "\\r"; break;
             case '\t': escaped += "\\t"; break;
-            default: escaped += character;
+            default: {
+                const auto byte = static_cast<unsigned char>(character);
+                if (byte < 0x20) {
+                    constexpr std::string_view hex = "0123456789abcdef";
+                    escaped += "\\u00";
+                    escaped += hex[byte >> 4];
+                    escaped += hex[byte & 0xf];
+                } else {
+                    escaped += character;
+                }
+            }
         }
     }
 
@@ -344,7 +354,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     return {
         "windows-pointer-linux",
         "Windows 11 pointer motion for physical mice",
-        "windows-pointer-linux contributors",
+        "junaga",
         WINDOWS_POINTER_VERSION,
     };
 }

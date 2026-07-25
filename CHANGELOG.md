@@ -11,8 +11,8 @@
   fractional device rotation through unchanged;
 - exposes Lua configuration plus `hyprctl` status and reset diagnostics;
 - includes an independent reference model, exhaustive settings tests, human
-  motion scenarios, sanitizers, a fuzzer, replay tools, a Windows observation
-  oracle, a native benchmark, and a live uinput/Hyprland test;
+  motion scenarios, sanitizers, a fuzzer, replay tools, a native benchmark,
+  and a live uinput/Hyprland test;
 - ships CMake presets, install rules, hyprpm metadata, and Linux/Windows CI.
 
 yes, version zero took the scenic route.

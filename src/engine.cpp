@@ -131,21 +131,22 @@ void Engine::buildCurve(std::uint16_t displayDpi) {
 
     const auto dpiFactor   = (static_cast<std::int64_t>(displayDpi) << 16) / 0x78;
     const auto speedFactor = (static_cast<std::int64_t>(m_settings.pointerSpeed) << 16) / 10;
+    std::array<std::int64_t, 5> scaledY{};
 
     for (std::size_t index = 0; index < SMOOTH_MOUSE_X_CURVE.size(); ++index) {
         m_ballistics.x[index] = (SMOOTH_MOUSE_X_CURVE[index] * 0x38000) >> 16;
 
-        const auto scaledY = (dpiFactor * SMOOTH_MOUSE_Y_CURVE[index]) >> 16;
-        m_ballistics.y[index] = (scaledY * speedFactor) >> 16;
+        const auto dpiScaledY = (dpiFactor * SMOOTH_MOUSE_Y_CURVE[index]) >> 16;
+        scaledY[index] = (dpiScaledY * speedFactor) >> 16;
     }
 
     for (std::size_t index = 0; index < m_ballistics.slopes.size(); ++index) {
         const auto dx = m_ballistics.x[index + 1] - m_ballistics.x[index];
-        const auto dy = m_ballistics.y[index + 1] - m_ballistics.y[index];
+        const auto dy = scaledY[index + 1] - scaledY[index];
 
         m_ballistics.slopes[index] = dx == 0 ? 0 : (dy << 16) / dx;
         m_ballistics.intercepts[index] =
-            m_ballistics.y[index] - ((m_ballistics.slopes[index] * m_ballistics.x[index]) >> 16);
+            scaledY[index] - ((m_ballistics.slopes[index] * m_ballistics.x[index]) >> 16);
     }
 
     m_ballisticsDpi = displayDpi;
@@ -159,8 +160,8 @@ auto Engine::applyEnhanced(Motion raw, std::uint16_t displayDpi) -> Motion {
     if (displayDpi != m_ballisticsDpi)
         buildCurve(displayDpi);
 
-    const auto xFixed = static_cast<std::int64_t>(raw.x) * Q16;
-    const auto yFixed = static_cast<std::int64_t>(raw.y) * Q16;
+    const auto xFixed = static_cast<std::int64_t>(raw.x) * Q16_VALUE;
+    const auto yFixed = static_cast<std::int64_t>(raw.y) * Q16_VALUE;
     const auto absX   = xFixed >= 0 ? xFixed : -xFixed;
     const auto absY   = yFixed >= 0 ? yFixed : -yFixed;
     const auto distance = std::max(absX, absY) + (std::min(absX, absY) >> 1);
@@ -188,11 +189,11 @@ auto Engine::applyEnhanced(Motion raw, std::uint16_t displayDpi) -> Motion {
 
     const auto xTotal = multiplyQ16(xFixed, gain) + m_enhancedXRemainder;
     const auto yTotal = multiplyQ16(yFixed, gain) + m_enhancedYRemainder;
-    const auto x      = xTotal / Q16;
-    const auto y      = yTotal / Q16;
+    const auto x      = xTotal / Q16_VALUE;
+    const auto y      = yTotal / Q16_VALUE;
 
-    m_enhancedXRemainder = xTotal % Q16;
-    m_enhancedYRemainder = yTotal % Q16;
+    m_enhancedXRemainder = xTotal % Q16_VALUE;
+    m_enhancedYRemainder = yTotal % Q16_VALUE;
 
     return {narrow(x), narrow(y)};
 }
@@ -201,11 +202,11 @@ auto Engine::applyLinear(Motion raw) -> Motion {
     const auto gain   = LINEAR_GAINS_Q16.at(m_settings.pointerSpeed - 1);
     const auto xTotal = static_cast<std::int64_t>(raw.x) * gain + m_linearXRemainder;
     const auto yTotal = static_cast<std::int64_t>(raw.y) * gain + m_linearYRemainder;
-    const auto x      = xTotal / Q16;
-    const auto y      = yTotal / Q16;
+    const auto x      = xTotal / Q16_VALUE;
+    const auto y      = yTotal / Q16_VALUE;
 
-    m_linearXRemainder = xTotal % Q16;
-    m_linearYRemainder = yTotal % Q16;
+    m_linearXRemainder = xTotal % Q16_VALUE;
+    m_linearYRemainder = yTotal % Q16_VALUE;
 
     return {narrow(x), narrow(y)};
 }
@@ -214,11 +215,9 @@ auto displayDpiFromScale(double scale) -> std::uint16_t {
     if (!std::isfinite(scale) || scale <= 1.0)
         return MIN_DISPLAY_DPI;
 
-    const auto dpi = std::lround(scale * MIN_DISPLAY_DPI);
-    return static_cast<std::uint16_t>(std::clamp(
-        dpi,
-        static_cast<long>(MIN_DISPLAY_DPI),
-        static_cast<long>(MAX_DISPLAY_DPI)));
+    const auto boundedScale =
+        std::min(scale, static_cast<double>(MAX_DISPLAY_DPI) / MIN_DISPLAY_DPI);
+    return static_cast<std::uint16_t>(std::lround(boundedScale * MIN_DISPLAY_DPI));
 }
 
 } // namespace windows_pointer
