@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 project(
   windows-pointer-linux
   VERSION 1.0.0
-  DESCRIPTION "Windows 11 pointer motion for Hyprland"
+  DESCRIPTION "The Windows 11 desktop pointer algorithm for Linux"
   LANGUAGES CXX
 )
 

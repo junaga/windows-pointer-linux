@@ -14,10 +14,14 @@ assembly is how you relax.
 Two Microsoft symbol-server copies of `win32kbase.sys` were checked so this
 would not quietly depend on one old build:
 
+<!-- markdownlint-disable MD013 -->
+
 | Windows release | File version | `win32kbase.sys` SHA-256 | PDB SHA-256 |
 | --- | --- | --- | --- |
 | Windows 11 24H2 | 10.0.26100.3194 | `3797988de774548b62d330b0d83650157ede04ad561c358287c6e2efdf33d571` | `99b74efaf282361daec28f18366321164cf6e31887fbc8d4e88a25ea8fe1ea9e` |
 | Windows 11 26H1, KB5101649 | 10.0.28000.2525 | `2ffeb3fd6aa653a3254c18dc0208e15d518ad348b1fe4477fb30f326de31419b` | `2796cd48c57b8dc9c3c49464539859f883feaec82a5c33193499ab4b7a797c4b` |
+
+<!-- markdownlint-enable MD013 -->
 
 The files were located through [Winbindex], downloaded from Microsoft's public
 symbol server, and matched against the hashes in the corresponding Windows
@@ -96,10 +100,11 @@ words, two physical mice moving the same Windows cursor share motion history.
 Linear and enhanced motion keep separate remainder state, which survives
 switching the Enhance pointer precision setting.
 
-Hyprland supplies the same ingredients: raw device coordinates, the monitor
-currently containing the cursor, and that monitor's logical scale. The adapter
-maps scale to effective DPI with `round(scale * 96)` and the engine preserves
-the session-wide state.
+A desktop adapter must supply the same ingredients: raw device coordinates and
+the effective DPI of the display currently containing the cursor. The shipped
+adapter derives effective DPI as `round(display scale * 96)`. Other
+compositors may expose the same value differently. The engine preserves the
+session-wide state independently of that integration.
 
 ## Enhance pointer precision off
 
@@ -114,12 +119,15 @@ Without EPP, Windows stores the speed factor in Q8. The exact 1–20 mapping is:
 This gives `1.0` at the Windows 11 default of `10/20`. Fractional results are
 carried between reports.
 
-## confidence boundary
+## audited version boundary
 
-This audit establishes the default arithmetic and state machine in two
-shipping Windows 11 releases. It is stronger evidence than copying a curve
-generator, but it is not a Microsoft API guarantee. A future Windows build can
-change private kernel behavior. The independent model in the test suite makes
-such a change explicit instead of letting the implementation drift quietly.
+The engine is exact to the default arithmetic and state machine in both
+shipping Windows 11 releases listed above. The relevant constants and
+operations are identical between them.
+
+This routine is private kernel behavior, not a Microsoft API guarantee. A
+future Windows build can change it. The hashes define the implementation target
+precisely, and the independent test model makes any future update explicit
+instead of letting the result drift quietly.
 
 [Winbindex]: https://github.com/m417z/winbindex

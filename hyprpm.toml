@@ -6,7 +6,7 @@ commit_pins = [
 ]
 
 [windows-pointer-linux]
-description = "the windows 11 pointer algorithm, except it escaped"
+description = "the exact Windows 11 desktop pointer algorithm"
 authors = ["junaga"]
 output = "build/windows-pointer-linux.so"
 build = [

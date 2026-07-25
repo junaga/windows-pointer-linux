@@ -1,197 +1,21 @@
 # windows-pointer-linux
 
-Windows 11 desktop pointer motion for Hyprland. finally fixed, because
-apparently even moving a cursor had to remain a platform exclusive.
+**The Windows 11 desktop pointer algorithm, rebuilt for Linux.**
 
-This plugin takes the raw integer reports Hyprland already receives from a
-physical mouse and replaces libinput's accelerated cursor delta with the
-current Windows fixed-point algorithm. It implements both public Windows 11
-controls:
+Windows pointer motion is not an acceleration curve. It is a fixed-point,
+report-to-report state machine. `windows-pointer-linux` implements that state
+machine: all 20 pointer speeds, Enhance pointer precision on and off, signed
+subpixel remainders, segment transitions, shared mouse state, and per-display
+scaling.
 
-- pointer speed from `"1/20"` through `"20/20"`;
-- Enhance pointer precision on or off.
+The engine is a small, platform-independent C++ library. Version 1.0 ships its
+first desktop adapter for Hyprland. The engine itself does not know what
+Hyprland, Wayland, libinput, or even Linux is. A cursor was apparently still
+platform-exclusive software. it isn't now.
 
-No device DPI. No polling-rate questionnaire. Both are already encoded in the
-counts and report boundaries produced by the mouse. Asking for them again
-would be extremely configurable double counting.
+## use it today: Hyprland
 
-To the best of the public source search documented below, this is the first
-exact Windows 11 pointer implementation for Hyprland. It is not the first
-project to make a Linux cursor vaguely Windows-flavoured. That achievement has
-been independently rediscovered through lookup tables, curve generators,
-patched system libraries, kernel modules, and at least one Raspberry Pi. We
-finished the desktop behaviour instead.
-
-## what is actually implemented
-
-Version 1.0 implements:
-
-- the default EPP curves audited in two shipping `win32kbase.sys` builds;
-- the complete 1–20 pointer-speed mapping with EPP enabled or disabled;
-- Windows' fixed-point arithmetic and signed subpixel remainders;
-- previous-segment state and one-report upward-transition smoothing;
-- zero-report behaviour;
-- session-wide state shared by all physical mice;
-- effective DPI selected from the monitor currently under the cursor;
-- direct replacement of Hyprland's normal desktop cursor delta;
-- unchanged raw relative motion for applications and games.
-
-The implementation target and binary hashes are recorded in
-[the Windows audit](docs/research/windows-11.md). This is private Windows
-behaviour, not a Microsoft API contract. If Microsoft changes it later, we get
-to reverse-engineer a mouse again. the future remains bright.
-
-## why a custom curve is not enough
-
-Windows does not evaluate a static function of velocity. For every integer
-X/Y report it:
-
-1. computes an approximate two-dimensional distance;
-2. selects a piecewise curve segment;
-3. smooths the first transition into a faster segment;
-4. applies fixed-point gain independently to both axes;
-5. carries signed fractional output into later reports;
-6. remembers the segment for the next report.
-
-Libinput custom profiles receive libinput's calculated velocity. They cannot
-represent the previous segment, the remainders, the zero-report rule, or the
-original report boundaries. A curve can resemble Windows. It cannot become
-Windows by adding more decimal places and confidence.
-
-## what came before
-
-There is real prior art here, and it deserves links instead of a victory lap
-over imaginary opponents. None of the following projects is useless. None
-implements the same complete current Windows 11 desktop behaviour either.
-
-- [`libinput-epp`](https://gitlab.freedesktop.org/tehabstract/libinput-epp)
-  is the closest predecessor. Its EPP core should match under narrow
-  conditions: one mouse and 96 DPI display scaling. But it replaces system
-  libinput, requires privileged package/library installation, implements only
-  EPP, keeps state per device, changes previous-segment state on zero reports,
-  and cannot follow per-monitor DPI. The patch also replaces libinput's normal
-  adaptive fallback rather than exposing a complete independently selectable
-  Windows profile, and it has no regression, scaling, multi-device, sanitizer,
-  or state-transition test suite.
-
-- [`libpointing`](https://github.com/INRIA/libpointing) is the oldest serious
-  Linux implementation found, originating in the 2011 UIST paper
-  [*No More Bricolage!*](https://doi.org/10.1145/2047196.2047276). It provides
-  empirically measured Windows EPP and non-EPP transfer functions to
-  applications reading raw HID input. It does not replace the Wayland desktop
-  cursor. Its Windows backend interpolates measured tables using Euclidean
-  magnitude, floating-point remainders, and direction-change resets rather
-  than the current fixed-point Windows state machine.
-
-- [`SmoothMouse`](https://github.com/spamwax/SmoothMouse) brought
-  libpointing-derived Windows acceleration to macOS system-wide. It is macOS
-  only, was retired in 2013, and implements the older Windows 7-era
-  floating-point model with fixed 96 DPI and 60 Hz assumptions.
-
-- [`hidlikewindows`](https://github.com/temuera/hidlikewindows) runs an older
-  Windows-like floating-point formula through one or two Raspberry Pis acting
-  as a USB proxy. It has fixed display assumptions and processes `REL_X` and
-  `REL_Y` evdev events as separate acceleration calls, losing the
-  two-dimensional report semantics Windows uses. The hardware requirement is
-  admirably committed to avoiding a compositor plugin.
-
-- [Hyprland's Windows curve generator][hypr-generator] is a convenience fork
-  of [the original libinput generator][original-generator]. It samples the
-  registry curve into a libinput custom profile. Both sources explicitly say
-  the scaling calculation is guessed; the original author also says the exact
-  Windows formula is unavailable. Sampling a curve cannot preserve report
-  state or signed remainders, regardless of sample count.
-
-- [Libinput custom profiles][libinput-custom] are the cleanest configuration
-  mechanism when “roughly this shape” is enough. They evaluate a sampled gain
-  function over libinput velocity, not the Windows integer-report state
-  machine.
-
-- [Libinput Lua plugins][libinput-lua] can alter evdev frames without carrying
-  a permanent libinput fork. This is a promising cross-compositor layer when
-  the consumer explicitly enables the plugin context. Hyprland currently does
-  not.
-
-- [`mouse-sync`](https://github.com/ShouldBeLightWay/mouse-sync) transports
-  Windows mouse settings into KDE. Its Linux backend writes KWin's native
-  pointer speed and acceleration profile; KWin still executes libinput's
-  algorithm. It synchronizes settings data, not the behaviour behind the
-  settings.
-
-- [`YeetMouse`](https://github.com/AndyFilter/YeetMouse) is a configurable
-  Linux kernel acceleration module. Its EPP guide converts a velocity curve
-  into a sensitivity lookup table because velocity LUTs are unsupported. A LUT
-  still cannot reproduce report-to-report Windows state. Installation requires
-  root, kernel headers, DKMS/module management, and disabling desktop
-  acceleration.
-
-- [`LeetMouse`](https://github.com/systemofapwne/leetmouse), YeetMouse's
-  deprecated predecessor, provides Quake-style kernel acceleration rather than
-  the Windows desktop algorithm. It carries the same privileged DKMS and
-  kernel-compatibility cost.
-
-- [`maccel`](https://github.com/Gnarus-G/maccel) is a maintained kernel module
-  for designing linear, natural, and synchronous acceleration curves. It is
-  intentionally a better custom-acceleration laboratory, not a Windows
-  compatibility implementation. It also requires privileged DKMS
-  installation.
-
-- [Xorg pointer acceleration][xorg-accel] provides server-side threshold,
-  polynomial, simple, smooth-linear, and device profiles. These are Xorg's
-  algorithms. A native Wayland cursor does not pass through them, and an
-  XWayland client cannot configure the compositor's pointer.
-
-- [Raw Accel](https://github.com/RawAccelOfficial/rawaccel) is a mature Windows
-  driver for programmable raw-input acceleration. It runs on Windows, changes
-  application raw input rather than reproducing the default desktop cursor on
-  Linux, and describes its own EPP LUT matching as very close rather than
-  exact.
-
-- [MarkC's Windows analysis][markc] documents the Windows slider mappings and
-  registry curves and provides registry fixes for Windows itself. It is
-  invaluable research, not a Linux input implementation.
-
-- A userspace [uinput][uinput] daemon could be compositor-independent and
-  exact. It would also need exclusive evdev grabs, permissions, hotplug
-  tracking, loop prevention, replacement devices, a background service, and
-  failure recovery that returns the real mouse when the daemon dies. No public
-  daemon implementing the complete current Windows state machine was found.
-
-This plugin chooses the smallest layer with both facts the algorithm needs:
-the original report and the final desktop cursor destination. The result needs
-no root access, kernel module, system-library replacement, permanent fake
-mouse, device-specific DPI value, or polling-rate estimate. The price is
-Hyprland-only support and a rebuild when Hyprland's C++ ABI changes.
-
-## install
-
-You need CMake 3.25+, a C++23 compiler, pkg-config, and development headers for
-the exact Hyprland build you are running.
-
-### local install
-
-```sh
-cmake --preset release
-cmake --build --preset release
-ctest --preset release
-cmake --install build/release --prefix "$HOME/.local"
-```
-
-Load the absolute path:
-
-```lua
-local plugin = os.getenv("HOME")
-    .. "/.local/lib/hyprland/plugins/windows-pointer-linux.so"
-
-hl.plugin.load(plugin)
-```
-
-Hyprland plugins use an unstable C++ ABI. The plugin verifies the complete ABI
-hash and refuses to load against another compositor build. Rebuild it after a
-Hyprland update. annoying, but significantly nicer than debugging a stale
-vtable with your cursor.
-
-### hyprpm
+Install and enable the adapter with `hyprpm`:
 
 ```sh
 hyprpm add https://github.com/junaga/windows-pointer-linux
@@ -199,34 +23,7 @@ hyprpm enable windows-pointer-linux
 hyprpm reload
 ```
 
-### rebuilding a loaded plugin
-
-Unload before overwriting the shared object:
-
-```sh
-hyprctl plugin unload \
-  "$HOME/.local/lib/hyprland/plugins/windows-pointer-linux.so"
-cmake --build --preset release
-cmake --install build/release --prefix "$HOME/.local"
-hyprctl plugin load \
-  "$HOME/.local/lib/hyprland/plugins/windows-pointer-linux.so"
-```
-
-Hyprland queues a configuration reload after plugin load and unload, so the
-Lua settings are reapplied automatically.
-
-Use the exact pathname string originally passed to `hl.plugin.load`.
-Hyprland's unload lookup compares paths, not files: a symlink, bind-mounted
-alias, or other path to the same inode still receives the wonderfully precise
-answer `plugin not loaded`.
-
-Do not overwrite a loaded `.so`. Hyprland is executing it inside the
-compositor, and lazy page faults are an exciting place to discover half of a
-new binary.
-
-## configure
-
-The guard handles Hyprland's two-phase Lua plugin load during a fresh session:
+Configure the same two controls exposed by Windows 11:
 
 ```lua
 if hl.plugin.windows_pointer_linux then
@@ -241,86 +38,273 @@ if hl.plugin.windows_pointer_linux then
 end
 ```
 
-`"10/20"` with EPP enabled is the Windows 11 default. Configuration reloads
-preserve the motion accumulators, matching Windows. Invalid speed strings are
-rejected and reported as a Hyprland notification instead of becoming a
-creative new input mode.
+`"10/20"` with EPP enabled is the Windows default. Leave
+`input.force_no_accel` disabled; it explicitly asks the compositor to bypass
+the accelerated desktop delta, including this one.
 
-Leave `input.force_no_accel` disabled. That option explicitly makes Hyprland
-consume raw motion instead of the accelerated delta, including ours. Libinput
-`sensitivity` and `accel_profile` no longer shape the normal cursor while the
-plugin is active because their output is replaced.
+Inspect the running adapter with `hyprctl windows-pointer-linux` or its JSON
+form, `hyprctl -j windows-pointer-linux`. The `reset` argument clears its
+diagnostics and session motion state. Hyprland plugins follow Hyprland's
+unstable C++ ABI, so rebuild the adapter after a compositor update. No root
+access, kernel module, system-library replacement, background daemon, or fake
+mouse is involved.
 
-## inspect it
+## what exact means
 
-```sh
-hyprctl windows-pointer-linux
-hyprctl -j windows-pointer-linux
-hyprctl windows-pointer-linux reset
-```
+The implementation follows the private Windows 11 desktop routine audited in
+two shipping builds:
 
-Status includes the active settings, pass-through reasons, per-device report
-counts, current display DPI, and the last raw/output motion. `reset` clears
-diagnostics and the session pointer state, preserving the ancient debugging
-ritual without unloading actual machine code.
+- Windows 11 24H2, `win32kbase.sys` 10.0.26100.3194;
+- Windows 11 26H1, `win32kbase.sys` 10.0.28000.2525.
+
+Exact here means the same default curve constants, integer operations,
+slider mappings, state transitions, and state ownership observed in those
+builds. It does not mean “a curve that looked about right after moving the
+mouse in circles.”
+
+Version 1.0 implements:
+
+- every pointer-speed position from `1/20` through `20/20`;
+- Enhance pointer precision enabled and disabled;
+- the default Windows fixed-point acceleration curve;
+- signed subpixel accumulation on both axes;
+- previous-segment state and one-report upward-transition smoothing;
+- the Windows zero-report rule;
+- state shared by every physical mouse controlling one desktop pointer;
+- effective DPI selected from the display containing the cursor;
+- replacement of the accelerated desktop delta without changing application
+  raw input.
+
+The complete implementation record, including binary and PDB hashes, is in
+[the Windows audit](docs/research/windows-11.md). No Microsoft binary, PDB,
+registry export, or source code is distributed here.
+
+Mouse DPI and polling rate are deliberately not settings. Windows' routine
+does not receive either value. Hardware resolution is already encoded in the
+counts a mouse reports, and reporting behavior is already encoded in the
+report boundaries. Asking for those numbers again would double-count them
+with a very professional-looking settings dialog.
+
+## why a custom curve cannot do this
+
+For each integer X/Y report, Windows:
+
+1. approximates the two-dimensional report distance;
+2. selects a piecewise curve segment;
+3. smooths the first transition into a faster segment;
+4. applies fixed-point gain independently to both axes;
+5. carries signed fractional output into later reports;
+6. remembers the segment for the next report.
+
+A libinput custom profile receives libinput's calculated velocity and returns
+a gain. It cannot recover the original report state, previous segment, signed
+remainders, or zero-report behavior. Sampling the curve more densely only
+produces a more densely sampled approximation.
+
+This distinction also explains why a static `accel_profile` string was never
+going to finish the job. The missing part was not another decimal place. It
+was memory.
+
+## one engine, small adapters
+
+The portable engine accepts one raw integer motion report and the effective
+DPI of the display under the cursor, then returns one accelerated integer
+desktop delta. It owns the Windows arithmetic and all report-to-report state.
+
+The platform adapter owns only the surrounding input facts:
+
+| Responsibility | Engine | Adapter |
+| --- | :---: | :---: |
+| Windows curve and pointer-speed math | yes | |
+| Segment history and signed remainders | yes | |
+| EPP and non-EPP behavior | yes | |
+| Receive raw relative mouse reports | | yes |
+| Identify the cursor's display DPI | | yes |
+| Replace the normal desktop delta | | yes |
+| Preserve raw application input | | yes |
+| Pass through touchpads, pens, and virtual pointers | | yes |
+
+To support another compositor, an adapter must:
+
+1. intercept the raw integer X/Y report for a physical relative mouse;
+2. determine the effective DPI of the display containing the cursor;
+3. keep one `windows_pointer::Engine` per logical desktop pointer or seat;
+4. replace only the compositor's accelerated desktop delta with
+   `Engine::apply`;
+5. leave application-requested raw motion and unsupported device classes
+   untouched.
+
+That is the entire integration contract. Porting does not require
+reverse-engineering Windows again, modifying the engine, replacing libinput,
+or teaching users the polling rate of a mouse they bought six years ago. See
+[architecture](docs/architecture.md) for the data path, invariants, and
+adapter checklist.
+
+## why this project had to exist
+
+Linux already had Windows-like curves, settings synchronizers, application
+libraries, patched input stacks, kernel modules, and hardware proxies. It did
+not have one complete, practical implementation of the current Windows 11
+desktop state machine.
+
+The existing work falls across four boundaries:
+
+| Approach | Reproduces | Missing |
+| --- | --- | --- |
+| sampled curves | gain shape | report state and exact output |
+| application libraries | one client's motion | the desktop cursor |
+| input-stack replacements | system-wide control | small, unprivileged setup |
+| settings synchronizers | slider values | Windows behavior |
+
+The detailed comparison matters because “Windows acceleration for Linux” has
+meant several incompatible things:
+
+- [`libinput-epp`](https://gitlab.freedesktop.org/tehabstract/libinput-epp) is
+  the closest predecessor. Its EPP core should match under narrow conditions:
+  one mouse and 96 DPI display scaling. It replaces system libinput, requires
+  privileged package or library installation, implements only EPP, keeps
+  state per device, changes previous-segment state on zero reports, and cannot
+  follow per-monitor DPI. The patch also replaces libinput's normal adaptive
+  fallback instead of exposing a complete independently selectable Windows
+  profile, and it has no regression, scaling, multi-device, sanitizer, or
+  state-transition test suite.
+
+- [`libpointing`](https://github.com/INRIA/libpointing), originating in the
+  2011 UIST paper [*No More Bricolage!*][no-more-bricolage],
+  provides empirically measured Windows EPP and non-EPP transfer functions to
+  applications reading raw HID input. It does not replace the Wayland desktop
+  cursor. Its Windows backend interpolates measured tables using Euclidean
+  magnitude, floating-point remainders, and direction-change resets instead
+  of the current fixed-point Windows state machine.
+
+- [`SmoothMouse`](https://github.com/spamwax/SmoothMouse) brought
+  libpointing-derived Windows acceleration to macOS system-wide. It is macOS
+  only, was retired in 2013, and implements the older Windows 7-era
+  floating-point model with fixed 96 DPI and 60 Hz assumptions.
+
+- [`hidlikewindows`](https://github.com/temuera/hidlikewindows) sends an older
+  Windows-like floating-point formula through one or two Raspberry Pis acting
+  as a USB proxy. It has fixed display assumptions and processes `REL_X` and
+  `REL_Y` evdev events as separate acceleration calls, losing the
+  two-dimensional report semantics Windows uses. The hardware requirement is
+  an impressively literal solution to a software problem.
+
+- [Hyprland's Windows curve generator][hypr-generator] is a convenience fork
+  of [the original libinput generator][original-generator]. It samples the
+  registry curve into a libinput custom profile. Both sources say the scaling
+  calculation is guessed; the original author also states that the exact
+  Windows formula is unavailable. A sampled curve has no report state or
+  signed remainders.
+
+- [Libinput custom profiles][libinput-custom] are the cleanest configuration
+  mechanism when approximately the same gain shape is enough. They evaluate a
+  sampled gain function over libinput velocity, not the Windows
+  integer-report state machine.
+
+- [Libinput Lua plugins][libinput-lua] can transform evdev frames without a
+  permanent libinput fork. They are a plausible adapter layer where the
+  compositor enables the plugin context. They provide the hook, not the
+  Windows implementation, and support depends on each libinput consumer.
+
+- [`mouse-sync`](https://github.com/ShouldBeLightWay/mouse-sync) copies Windows
+  mouse settings into KDE. Its Linux backend writes KWin's native pointer
+  speed and acceleration profile, after which KWin still executes libinput's
+  algorithm. It synchronizes settings, not their behavior.
+
+- [`YeetMouse`](https://github.com/AndyFilter/YeetMouse) is a configurable
+  Linux kernel acceleration module. Its EPP guide converts a velocity curve
+  into a sensitivity lookup table because velocity LUTs are unsupported. A
+  LUT cannot reproduce report-to-report Windows state. Installation requires
+  root, kernel headers, DKMS or module management, and disabled desktop
+  acceleration.
+
+- [`LeetMouse`](https://github.com/systemofapwne/leetmouse), YeetMouse's
+  deprecated predecessor, implements Quake-style kernel acceleration rather
+  than the Windows desktop algorithm. It carries the same privileged DKMS and
+  kernel-compatibility cost.
+
+- [`maccel`](https://github.com/Gnarus-G/maccel) is a maintained kernel module
+  for designing linear, natural, and synchronous acceleration curves. It is a
+  custom-acceleration laboratory, not a Windows compatibility implementation.
+  It also requires privileged DKMS installation.
+
+- [Xorg pointer acceleration][xorg-accel] provides server-side threshold,
+  polynomial, simple, smooth-linear, and device profiles. These are Xorg's
+  algorithms. Native Wayland cursors do not pass through them, and an XWayland
+  client cannot configure its compositor's pointer.
+
+- [Raw Accel](https://github.com/RawAccelOfficial/rawaccel) is a mature Windows
+  driver for programmable raw-input acceleration. It runs on Windows, changes
+  application raw input rather than reproducing the default desktop cursor on
+  Linux, and describes its EPP lookup-table matching as very close rather than
+  exact.
+
+- [MarkC's Windows analysis][markc] documents slider mappings and registry
+  curves and provides registry fixes for Windows itself. It is indispensable
+  research, not a Linux input implementation.
+
+- A userspace [uinput][uinput] daemon could host this engine without compositor
+  support. Doing so safely requires exclusive evdev grabs, input permissions,
+  hotplug tracking, loop prevention, replacement devices, a background
+  service, and failure recovery that returns the real mouse when the daemon
+  exits. That is a valid future adapter with a much larger failure surface,
+  not a simpler installation method hiding behind the word “portable.”
+
+`windows-pointer-linux` puts the reusable algorithm in a standalone library
+and keeps platform interception in an adapter. The current adapter chooses the
+smallest layer that has both facts the algorithm needs: the original report
+and the final desktop cursor destination.
 
 ## scope
 
-The plugin changes normal cursor motion from physical mice.
+The engine implements the default Windows registry curve. Deliberately edited
+`SmoothMouseXCurve` and `SmoothMouseYCurve` values are outside the version 1.0
+contract.
 
-Touchpads, Wayland virtual pointers, absolute devices, malformed coordinates,
-and fractional raw coordinates produced by arbitrary device rotation pass
-through unchanged. Quarter-turn rotations normally remain integral.
+Desktop adapters should apply it to physical relative mice. Touchpad precision
+gestures, pens, absolute devices, virtual pointers, and malformed or
+non-integral relative coordinates pass through unchanged in the shipped
+adapter.
 
-Applications can explicitly request unaccelerated relative motion. Games often
-do. That path remains raw by design, just as Windows Raw Input is separate from
-the desktop cursor. This project fixes the cursor; it does not sneak
-acceleration into a game's private camera input.
+Applications can request unaccelerated relative motion for games, cameras, or
+other private input. That path remains raw by design, just as Windows Raw
+Input is distinct from its desktop cursor. This project fixes the cursor. It
+does not quietly accelerate somebody's crosshair and call that consistency.
 
-The default Windows registry curve is implemented. User-edited
-`SmoothMouseXCurve` and `SmoothMouseYCurve`, touchpad precision gestures, pen
-input, and application-defined acceleration are outside the promise.
+## tested like input infrastructure
 
-See [architecture](docs/architecture.md) for the exact hook and state
-ownership.
+The engine is checked against a separate straight-line model across:
 
-## testing
-
-The engine is independent from Hyprland and is checked against a separate
-straight-line model across:
-
-- all 20 pointer speeds, with EPP enabled and disabled;
+- all 20 pointer speeds with EPP enabled and disabled;
 - 96, 120, 144, 192, and 480 DPI display regions;
 - thousands of reports per configuration;
 - zero reports, segment transitions, signed remainders, and setting changes;
 - the complete signed evdev coordinate range;
-- three extremely formal scenarios involving Discord, Hypixel, and dragging a
-  file into a website.
+- independent state and explicit session-state reset boundaries;
+- scenario traces for answering a Discord call, playing Hypixel PvP, and
+  dragging a file into a website, the traditional pillars of computer
+  science.
 
-The project also runs address/undefined-behaviour sanitizers, libFuzzer, native
-trace replay, a microbenchmark, Clang static analysis, and a live synthetic
-mouse through uinput, libinput, and a running Hyprland session.
+The project also runs GCC, Clang, and MSVC builds, address and undefined
+behavior sanitizers, libFuzzer, native trace replay, a microbenchmark, and a
+live synthetic mouse through the complete shipped adapter path.
 
-The commands and expected boundaries are in [testing](docs/testing.md).
+See [testing](docs/testing.md) for the test model, commands, and exact
+boundaries.
 
-## develop
+## project map
 
-```sh
-cmake --preset dev
-cmake --build --preset dev
-ctest --preset dev
+- [Windows 11 audit](docs/research/windows-11.md) records the target binaries,
+  symbols, constants, arithmetic, and version boundary.
+- [Architecture](docs/architecture.md) defines engine ownership and the
+  adapter contract.
+- [Testing](docs/testing.md) documents conformance, regression, fuzz, replay,
+  integration, and performance checks.
+- [Contributing](CONTRIBUTING.md) explains how to change the engine or add an
+  adapter without turning either into folklore.
+- [Changelog](CHANGELOG.md) records released behavior.
 
-cmake --preset sanitize
-cmake --build --preset sanitize
-ctest --preset sanitize
-```
-
-See [contributing](CONTRIBUTING.md) before changing fixed-point arithmetic.
-Small commits are preferred. Lowercase sarcasm is welcome. Unexplained magic
-numbers remain illegal even when they feel correct.
-
-The project is BSD-3-Clause licensed. No Microsoft binary, PDB, registry
-export, or source code is distributed here.
+The project is [BSD-3-Clause licensed](LICENSE).
 
 ## primary references
 
@@ -334,14 +318,14 @@ export, or source code is distributed here.
 - [`libinput-epp`](https://gitlab.freedesktop.org/tehabstract/libinput-epp)
   records the earlier fixed-point EPP work.
 - [Mark Cranness' analysis][markc] records the non-EPP sensitivity mapping.
-- [Winbindex] locates binaries by Microsoft update metadata; PDBs came from
-  Microsoft's public symbol server.
+- [Winbindex] locates binaries through Microsoft update metadata; PDBs came
+  from Microsoft's public symbol server.
 
 [spi]: https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-systemparametersinfow
 [libinput-raw]: https://wayland.freedesktop.org/libinput/doc/latest/api/group__event__pointer.html
 [libinput-custom]: https://wayland.freedesktop.org/libinput/doc/latest/pointer-acceleration.html#the-custom-profile
 [libinput-lua]: https://wayland.freedesktop.org/libinput/doc/latest/lua-plugins.html
-[hypr-variables]: https://wiki.hypr.land/Configuring/Variables/
+[hypr-variables]: https://wiki.hypr.land/Configuring/Basics/Variables/
 [hypr-plugins]: https://wiki.hypr.land/Plugins/Using-Plugins/
 [hypr-generator]: https://gist.github.com/Bugg4/9c9f43c9d06ee678c716986efaf6f170
 [original-generator]: https://gist.github.com/yinonburgansky/7be4d0489a0df8c06a923240b8eb0191
@@ -349,3 +333,4 @@ export, or source code is distributed here.
 [markc]: https://www.esreality.com/post/1846538/markc-windows-7-mouse-acceleration-fix/
 [uinput]: https://www.kernel.org/doc/html/latest/input/uinput.html
 [Winbindex]: https://github.com/m417z/winbindex
+[no-more-bricolage]: https://direction.bordeaux.inria.fr/~roussel/publications/2011-UIST-libpointing.pdf

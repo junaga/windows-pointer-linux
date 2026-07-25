@@ -353,7 +353,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     return {
         "windows-pointer-linux",
-        "Windows 11 pointer motion for physical mice",
+        "Exact Windows 11 desktop pointer motion",
         "junaga",
         WINDOWS_POINTER_VERSION,
     };

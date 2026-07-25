@@ -73,7 +73,7 @@ TEST(MotionState, KeepsLinearAndEnhancedRemaindersSeparate) {
     EXPECT_EQ(engine.apply({1, 0}), (Motion{1, 0}));
 }
 
-TEST(DisplayDpi, ConvertsHyprlandScaleToWindowsDpi) {
+TEST(DisplayDpi, ConvertsLogicalScaleToWindowsDpi) {
     EXPECT_EQ(displayDpiFromScale(0.75), 96);
     EXPECT_EQ(displayDpiFromScale(1.0), 96);
     EXPECT_EQ(displayDpiFromScale(1.25), 120);
