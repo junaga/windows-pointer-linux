@@ -76,20 +76,20 @@ constexpr std::int64_t  Q16_VALUE       = 1LL << 16;
 
 } // namespace
 
-auto parsePointerSpeed(std::string_view value) -> std::expected<std::uint8_t, std::string> {
+auto parsePointerSpeed(std::string_view value) -> std::optional<std::uint8_t> {
     constexpr std::string_view suffix = "/20";
 
     if (!value.ends_with(suffix))
-        return std::unexpected("pointer speed must look like \"10/20\"");
+        return std::nullopt;
 
     const auto number = value.substr(0, value.size() - suffix.size());
     if (number.empty())
-        return std::unexpected("pointer speed must look like \"10/20\"");
+        return std::nullopt;
 
     unsigned speed = 0;
     const auto [end, error] = std::from_chars(number.data(), number.data() + number.size(), speed);
     if (error != std::errc{} || end != number.data() + number.size() || speed < 1 || speed > 20)
-        return std::unexpected("pointer speed must be between \"1/20\" and \"20/20\"");
+        return std::nullopt;
 
     return static_cast<std::uint8_t>(speed);
 }

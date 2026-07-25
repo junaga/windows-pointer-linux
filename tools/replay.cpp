@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
             if (argument == "--speed" && index + 1 < argc) {
                 const auto speed = windows_pointer::parsePointerSpeed(argv[++index]);
                 if (!speed)
-                    throw std::runtime_error(speed.error());
+                    throw std::runtime_error(std::string{windows_pointer::POINTER_SPEED_ERROR});
                 settings.pointerSpeed = *speed;
             } else if (argument == "--epp" && index + 1 < argc) {
                 const std::string_view value = argv[++index];

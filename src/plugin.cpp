@@ -77,7 +77,7 @@ void readSettings() {
     if (!parsedSpeed) {
         HyprlandAPI::addNotification(
             g_pluginHandle,
-            "[windows-pointer-linux] ignoring pointer-speed: " + parsedSpeed.error(),
+            "[windows-pointer-linux] ignoring pointer-speed: " + std::string{windows_pointer::POINTER_SPEED_ERROR},
             CHyprColor{1.0F, 0.7F, 0.2F, 1.0F},
             5000.0F);
         return;
@@ -274,7 +274,7 @@ void registerConfig() {
         .validator = [](const Config::STRING& value) -> std::expected<void, std::string> {
             const auto parsed = windows_pointer::parsePointerSpeed(value);
             if (!parsed)
-                return std::unexpected(parsed.error());
+                return std::unexpected(std::string{windows_pointer::POINTER_SPEED_ERROR});
             return {};
         },
     };

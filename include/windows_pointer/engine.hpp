@@ -2,8 +2,7 @@
 
 #include <array>
 #include <cstdint>
-#include <expected>
-#include <string>
+#include <optional>
 #include <string_view>
 
 namespace windows_pointer {
@@ -22,7 +21,10 @@ struct Settings {
     auto operator==(const Settings&) const -> bool = default;
 };
 
-[[nodiscard]] auto parsePointerSpeed(std::string_view value) -> std::expected<std::uint8_t, std::string>;
+inline constexpr std::string_view POINTER_SPEED_ERROR =
+    "pointer speed must be between \"1/20\" and \"20/20\"";
+
+[[nodiscard]] auto parsePointerSpeed(std::string_view value) -> std::optional<std::uint8_t>;
 
 class Engine {
   public:
