@@ -2,7 +2,7 @@
 name = "windows-pointer-linux"
 authors = ["junaga"]
 commit_pins = [
-    ["a0136d8c04687bb36eb8a28eb9d1ff92aea99704", "d8b5e601cabe4b23fb92ec7d726a3ea4f734828a"],
+    ["a0136d8c04687bb36eb8a28eb9d1ff92aea99704", "c57c64d69fe356a737af85ddf90807fad9f73022"],
 ]
 
 [windows-pointer-linux]
