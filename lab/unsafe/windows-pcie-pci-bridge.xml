@@ -1,0 +1,4 @@
+<controller type='pci' index='15' model='pcie-to-pci-bridge'>
+  <model name='pcie-pci-bridge'/>
+  <address type='pci' domain='0x0000' bus='0x04' slot='0x00' function='0x0'/>
+</controller>

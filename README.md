@@ -300,6 +300,8 @@ boundaries.
   adapter contract.
 - [Testing](docs/testing.md) documents conformance, regression, fuzz, replay,
   integration, and performance checks.
+- [Windows/Linux VM lab](lab/README.md) runs the same synthetic HID reports
+  through both operating systems without taking over host USB devices.
 - [Contributing](CONTRIBUTING.md) explains how to change the engine or add an
   adapter without turning either into folklore.
 - [Changelog](CHANGELOG.md) records released behavior.

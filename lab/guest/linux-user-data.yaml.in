@@ -1,0 +1,100 @@
+#cloud-config
+hostname: wplab-linux
+manage_etc_hosts: true
+ssh_pwauth: false
+disable_root: true
+
+users:
+  - name: lab
+    gecos: Pointer Lab
+    groups:
+      - adm
+      - audio
+      - input
+      - render
+      - seat
+      - sudo
+      - video
+    lock_passwd: true
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - @SSH_PUBLIC_KEY@
+
+package_update: true
+package_upgrade: false
+packages:
+  - bluez
+  - cmake
+  - dbus-user-session
+  - g++
+  - git
+  - greetd
+  - hyprland
+  - hyprland-dev
+  - jq
+  - libinput-tools
+  - mesa-utils
+  - ninja-build
+  - openssh-server
+  - pkg-config
+  - qemu-guest-agent
+  - seatd
+  - sudo
+  - tshark
+  - usbutils
+  - xwayland
+
+write_files:
+  - path: /usr/sbin/policy-rc.d
+    permissions: "0755"
+    content: |
+      #!/bin/sh
+      exit 101
+
+  - path: /etc/greetd/config.toml
+    permissions: "0644"
+    content: |
+      [terminal]
+      vt = 7
+
+      [default_session]
+      command = "Hyprland --config /home/lab/.config/hypr/hyprland.conf"
+      user = "lab"
+
+  - path: /etc/sudoers.d/pointer-lab
+    permissions: "0440"
+    content: |
+      lab ALL=(ALL) NOPASSWD: ALL
+
+  - path: /home/lab/.config/hypr/hyprland.conf
+    permissions: "0644"
+    content: |
+      monitor = ,preferred,auto,1
+
+      input {
+          kb_layout = us
+          accel_profile = flat
+          sensitivity = 0
+      }
+
+      cursor {
+          no_hardware_cursors = true
+      }
+
+      misc {
+          disable_hyprland_logo = true
+          disable_splash_rendering = true
+      }
+
+      bind = SUPER, Q, exec, foot
+
+runcmd:
+  - [rm, -f, /usr/sbin/policy-rc.d]
+  - [systemctl, enable, --now, qemu-guest-agent.service]
+  - [systemctl, enable, ssh.service]
+  - [systemctl, enable, greetd.service]
+  - [systemctl, set-default, graphical.target]
+  - [chown, -R, "lab:lab", /home/lab]
+  - [systemctl, start, greetd.service]
+
+final_message: "windows-pointer-lab Linux guest ready"

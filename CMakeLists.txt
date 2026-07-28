@@ -63,6 +63,21 @@ if(WINDOWS_POINTER_BUILD_TOOLS)
   windows_pointer_target_defaults(windows-pointer-replay)
   target_link_libraries(windows-pointer-replay PRIVATE windows_pointer::engine)
 
+  if(WIN32)
+    add_executable(windows-pointer-windows-capture tools/windows-capture.cpp)
+    windows_pointer_target_defaults(windows-pointer-windows-capture)
+    target_link_libraries(windows-pointer-windows-capture PRIVATE user32 wtsapi32)
+    if(MINGW)
+      target_link_options(
+        windows-pointer-windows-capture
+        PRIVATE
+          -static
+          -static-libgcc
+          -static-libstdc++
+      )
+    endif()
+  endif()
+
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_executable(windows-pointer-uinput tools/uinput-mouse.cpp)
     windows_pointer_target_defaults(windows-pointer-uinput)

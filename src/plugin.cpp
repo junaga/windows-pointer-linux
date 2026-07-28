@@ -11,8 +11,10 @@
 #include <hyprland/src/plugins/PluginAPI.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <deque>
 #include <limits>
 #include <map>
 #include <optional>
@@ -37,6 +39,19 @@ SP<Config::Values::CBoolValue>   g_enhancePointerPrecision;
 CHyprSignalListener              g_configReloaded;
 Settings                         g_settings;
 Engine                           g_engine;
+
+struct TraceEntry {
+    std::uint64_t report = 0;
+    std::int64_t  timeNs = 0;
+    Motion        raw;
+    Motion        output;
+    std::uint16_t dpi = 96;
+};
+
+constexpr std::size_t TRACE_CAPACITY = 65536;
+std::deque<TraceEntry> g_trace;
+std::uint64_t           g_traceDropped = 0;
+bool                    g_traceEnabled = false;
 
 struct DeviceStats {
     std::uint64_t processed = 0;
@@ -152,6 +167,22 @@ void onMouseMoved(CInputManager* inputManager, IPointer::SMotionEvent event) {
 
             event.delta = Vector2D{static_cast<double>(moved.x), static_cast<double>(moved.y)};
 
+            if (g_traceEnabled) {
+                if (g_trace.size() == TRACE_CAPACITY) {
+                    g_trace.pop_front();
+                    ++g_traceDropped;
+                }
+                g_trace.push_back({
+                    .report = g_stats.processed,
+                    .timeNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                  std::chrono::steady_clock::now().time_since_epoch())
+                                  .count(),
+                    .raw = raw,
+                    .output = moved,
+                    .dpi = display.dpi,
+                });
+            }
+
             ++g_stats.processed;
             g_stats.lastRaw     = raw;
             g_stats.lastOutput  = moved;
@@ -208,6 +239,11 @@ void onMouseMoved(CInputManager* inputManager, IPointer::SMotionEvent event) {
                << "\"version\":\"" << WINDOWS_POINTER_VERSION << "\","
                << "\"pointer_speed\":\"" << static_cast<int>(g_settings.pointerSpeed) << "/20\","
                << "\"enhance_pointer_precision\":" << epp << ','
+               << "\"trace\":{"
+               << "\"enabled\":" << (g_traceEnabled ? "true" : "false") << ','
+               << "\"samples\":" << g_trace.size() << ','
+               << "\"capacity\":" << TRACE_CAPACITY << ','
+               << "\"dropped\":" << g_traceDropped << "},"
                << "\"processed\":" << g_stats.processed << ','
                << "\"passthrough\":{"
                << "\"touchpad\":" << g_stats.touchpads << ','
@@ -241,6 +277,8 @@ void onMouseMoved(CInputManager* inputManager, IPointer::SMotionEvent event) {
     } else {
         output << "windows-pointer-linux " << WINDOWS_POINTER_VERSION << '\n'
                << "settings: " << static_cast<int>(g_settings.pointerSpeed) << "/20, epp " << (g_settings.enhancePointerPrecision ? "on" : "off") << '\n'
+               << "trace: " << (g_traceEnabled ? "recording" : "stopped") << ", " << g_trace.size() << '/' << TRACE_CAPACITY << " samples, "
+               << g_traceDropped << " dropped\n"
                << "processed: " << g_stats.processed << '\n'
                << "passed through: " << g_stats.touchpads << " touchpad, " << g_stats.virtualPointers << " virtual, " << g_stats.otherPointers << " other, "
                << g_stats.invalidCoordinates << " invalid, " << g_stats.rotatedCoordinates << " rotated\n"
@@ -248,6 +286,42 @@ void onMouseMoved(CInputManager* inputManager, IPointer::SMotionEvent event) {
                << g_stats.lastRaw.x << ',' << g_stats.lastRaw.y << " -> " << g_stats.lastOutput.x << ',' << g_stats.lastOutput.y << '\n';
     }
 
+    return output.str();
+}
+
+void resetDiagnostics() {
+    g_engine.reset();
+    g_stats        = {};
+    g_trace        = {};
+    g_traceDropped = 0;
+}
+
+[[nodiscard]] auto traceDump(eHyprCtlOutputFormat format) -> std::string {
+    std::ostringstream output;
+    if (format == FORMAT_JSON) {
+        output << "{\"enabled\":" << (g_traceEnabled ? "true" : "false") << ",\"dropped\":" << g_traceDropped << ",\"entries\":[";
+        bool first = true;
+        for (const auto& entry : g_trace) {
+            if (!first)
+                output << ',';
+            first = false;
+            output << '{'
+                   << "\"report\":" << entry.report << ','
+                   << "\"time_ns\":" << entry.timeNs << ','
+                   << "\"raw_x\":" << entry.raw.x << ','
+                   << "\"raw_y\":" << entry.raw.y << ','
+                   << "\"output_x\":" << entry.output.x << ','
+                   << "\"output_y\":" << entry.output.y << ','
+                   << "\"dpi\":" << entry.dpi
+                   << '}';
+        }
+        output << "]}\n";
+    } else {
+        output << "report,time_ns,raw_x,raw_y,output_x,output_y,dpi\n";
+        for (const auto& entry : g_trace)
+            output << entry.report << ',' << entry.timeNs << ',' << entry.raw.x << ',' << entry.raw.y << ',' << entry.output.x << ',' << entry.output.y << ','
+                   << entry.dpi << '\n';
+    }
     return output.str();
 }
 
@@ -261,12 +335,34 @@ void onMouseMoved(CInputManager* inputManager, IPointer::SMotionEvent event) {
         return status(format);
 
     if (argument == "reset") {
-        g_engine.reset();
-        g_stats = {};
+        g_traceEnabled = false;
+        resetDiagnostics();
         return format == FORMAT_JSON ? "{\"ok\":true}\n" : "ok\n";
     }
 
-    return format == FORMAT_JSON ? "{\"error\":\"usage: windows-pointer-linux [status|reset]\"}\n" : "usage: windows-pointer-linux [status|reset]\n";
+    if (argument == "trace start") {
+        resetDiagnostics();
+        g_traceEnabled = true;
+        return format == FORMAT_JSON ? "{\"ok\":true,\"trace\":\"recording\"}\n" : "ok: trace recording\n";
+    }
+
+    if (argument == "trace stop") {
+        g_traceEnabled = false;
+        return format == FORMAT_JSON ? "{\"ok\":true,\"trace\":\"stopped\"}\n" : "ok: trace stopped\n";
+    }
+
+    if (argument == "trace clear") {
+        g_trace        = {};
+        g_traceDropped = 0;
+        return format == FORMAT_JSON ? "{\"ok\":true,\"trace\":\"cleared\"}\n" : "ok: trace cleared\n";
+    }
+
+    if (argument == "trace dump")
+        return traceDump(format);
+
+    return format == FORMAT_JSON ?
+        "{\"error\":\"usage: windows-pointer-linux [status|reset|trace start|trace stop|trace clear|trace dump]\"}\n" :
+        "usage: windows-pointer-linux [status|reset|trace start|trace stop|trace clear|trace dump]\n";
 }
 
 void registerConfig() {
