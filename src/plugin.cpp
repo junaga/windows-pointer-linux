@@ -6,7 +6,9 @@
 #include <hyprland/src/config/values/types/StringValue.hpp>
 #include <hyprland/src/devices/IPointer.hpp>
 #include <hyprland/src/event/EventBus.hpp>
-#include <hyprland/src/helpers/Monitor.hpp>
+#include <hyprland/src/output/Monitor.hpp>
+#include <hyprland/src/pointer/PointerManager.hpp>
+#include <hyprland/src/state/MonitorState.hpp>
 #include <hyprland/src/managers/input/InputManager.hpp>
 #include <hyprland/src/plugins/PluginAPI.hpp>
 
@@ -133,7 +135,7 @@ struct Display {
 };
 
 [[nodiscard]] auto currentDisplay() -> Display {
-    const auto monitor = g_pCompositor->getMonitorFromCursor();
+    const auto monitor = State::monitorState()->query().vec(Pointer::mgr()->position()).run();
     if (!monitor)
         return {};
 
